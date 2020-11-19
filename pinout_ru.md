@@ -168,3 +168,103 @@
 | 148                | AUDIO RIGHT                           |                                                                                                                                                                                                                                                               |
 | 149                | +12VDC                                |                                                                                                                                                                                                                                                               |
 | 150                | -12VDC                                |                                                                                                                                                                                                                                                               |
+
+
+## Группы сигналов, их описание ##
+
+Огромное количество полезной дополнительной информации можно найти в [спецификации на A1200](ext_docs/A1200_funcspec.txt)
+
+### 68EC020 processor signals ###
+
+
+| Сигнал| Описание                            | Направление (отн. процессора \ акселя) | Заметки                                                                                                                                                                                                        |
+| ------------| ------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A(23:0)     | address bus                        | out                                                                  |                                                                                                                                                                                                                       |
+| _AS         | address strobe                              | out                                                                  |                                                                                                                                                                                                                       |
+| _AVEC       | auto vector                        | in (nc)                                                              | На материнке никуда кроме проца и подтяжки к VCC не идёт |
+| _BEER       | bus error                                   | in                                                                   |                                                                                                                                                                                                                       |
+| _BG         | bus grant                                   | out (nc)                                                             | Просто выведен с набортного процессора на разъём                                                                             |
+| _BR         | bus request (may be tied to _BOSS)          | in (nc)                                                              | Вместе с _BOSS выбирают действующий процессор (набортный или аксель)                                                                                                |
+| _CPUCLK_A   | processor clock (14 MHz in A1200)           | in                                                                   |                                                                                                                                                                                                                       |
+| D(31:0)     | data bus                                    | i\o                                                                  | Двунаправленная шина данных, направление в зависимости от типа транзакции                                                                             |
+| _DS         | data strobe                                 | out                                                                  |                                                                                                                                                                                                                       |
+| _DSACK (1:0)| data strobe acknowledge                     | in                                                                   |                                                                                                                                                                                                                       |
+| FC(2:0)     | function codes (only 1:0 decoded)  | out                                                                  |                                                                                                                                                                                                                       |
+| _HLT        | halt request                                | i\o OC                                                               | <ul><li>Со стороны gayle: The  _KBRESET  input  drives  the  open  collector  outputs  RESET  an -HALT  low</li> <li>Со стороны 68020: The assertion of this bidirectional open-drain signal indicates that the processor should suspend bus activity or, when used with BERR, that the processor should retry the current cycle. When the processor has stopped executing instructions due to a double bus fault condition, the HALT line is asserted by the processor to indicate to external devices that the processor has stopped. </li></ul>|
+| _IPL(2:0)| interrupt priority        | in       |                                                                                                                     |
+| _RMC     | read/modify cycle (not implemented) | out (nc) | Просто выведен с набортного процессора на разъём |
+| _RST     | reset (processor bus)               | i\o OC   | Процессорный ресет, который заодно и сбрасывает всю оставшуюся машину. Open collector, можно дергать и устраивать ресеты  <ul><li>The _KBRESET input drives the open collector outputs RESET an -HALT low</li><li>This bidirectional open-drain signal is used to initiate a system reset. An external reset signal resets the MC68020/EC020 as well as all external devices. A reset signal from the processor (asserted as part of the RESET instruction) resets external devices only; the internal state of the processor is not altered. </li></ul>|
+| R_W       | read/write    | out |  |
+| SIZE (1:0)| transfer size | out |  |
+
+
+### amiga system specific signals ###
+
+
+| Сигнал| Описание                        | Направление (отн. акселя) | Заметки                                                                                                                                                                                                                       |
+| ------------| --------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| _BOSS       | main CPU disable (tied to _BG in A1200) | out OC                                        | Отключает 68020, предоставляет акселератору полный доступ к шине |
+| CCK_A       | amiga color clock (3.58MHz)             | in                                            | В данном контексте интересен тем, что это клок paula. "Fast processors need to reclock the IPL lines with CCK to prevent skew from causing false interrupt level coding."                      |
+| _CC_ENA     | credit card enable             | in                                            | Линия связана c декодированием  gaule адресов PCMCIA <ul><li>These cycles are active during accesses of address $4000’00 to $8FFFFF while a credit card is inserted.</li><li>Accesses from $400000 to $7FFFFF are to the credit card main memory.</li><li>Accesses from $8000000 to $8FFFFF are to credit card attribute memory.</li><li>Both types of cycles are identical,  except credit card attribute cycles assert _REG and _CC_ENA, while  main memory cycles  just assert _CC_ENA.</li><li>This represents 4 MB of directly accessible main memory address space</li></ul>|
+| E      | phi-2 clock for 8520's                                   | in | Выглядит как рудимент поддержки шины 6800, поправьте, если это не так. |
+| _CFGOUT| auto-config chain origin                                 | -- | Всегда посажен на землю                                              |
+| _FLASH | FO-F7 (flash) address decode (use with _OE/_WE) | in | Потенциально интересный сигнал: <ul><li>Memory at this decode is searched by the software for a diagnostic (early boot takeover) flag/vector and for «ROM-tags».</li><li>Placing ROM, RAM or FLASH memory at this decode provides potential for application specific ROM's, soft-loading OS modules and other debugging aids.</li><li>Since _WIDE is broken in the A1200, default termination for this space is 16-bit, asserting _OVR disables the decode, so 32-bit memory would have to do its own decode.</li><li>Но кажется, что значительно проще будет декодировать адреса локально на карте для подключения bootrom, вместо того, чтобы использовать этот сигнал. Тем более, что на том же B1260 явно так и делают.</li></ul>|
+| _INT2    | priority 2 interrupt request | out OC | Высокоприоритетное прерывание, только на выход, далее вся обработка (вектор прерывания и поиск устройства-затейника) софтварно |
+| _INT6    | priority 6 interrupt request | out OC | Низкоприоритетное прерывание, только на выход, далее вся обработка (вектор прерывания и поиск устройства-затейника) софтварно   |
+| _lORD    | I/O read strobe     | in     | Сигналы с клокпорта из gayle, также используются в ide                                          |
+| _IOWR    | I/O write strobe    | in     | Сигналы с клокпорта из gayle, также используются в ide                                          |
+| _KB_RESET| keyboard reset       | in     |<ul><li>По идее, это ресет, который генерится контроллером клавиатуры после аккорда ctrl+LA+RA</li><li>В funcspec вероятно перепутан с _XKB_RESET, которого нет на плате (смотри схему)</li></ul>|
+| LEFT   | left audio channel                              | analog out | Левый канал аудио, миксуется со звуком paula через резистивный сумматор (у аудио своя земля, если что)       |
+| _NET_CS| D9 (network) chip select (use with _IORD/_IOWR) | in         | очередной CS из gayle, кажется, на уровне софта не реализовано в ОС (пруфы?)                                                           |
+| _OE    | memory read strobe                              | in         | генерируются gayle, идут к PCMCIA и возможно косвенно (не разбирал какая логика у GAL внизу-слева на материнке) на Kickstart |
+| _OVR   | Gayle decode override                          | out OC     |<ul><li>[Информация тут, страница 11](ext_docs/gayle_specification.pdf)</li><li>_OVR tn-states the _DSACK lines so that the device may assert its own DSACKS. _OVR must be decoded prior to the assertion of address strobe and is latched for the duration of the cycle. </li><li>Используется при подключении простого расширения памяти (slave).</li><li>Use of these signals is only supported in the «Zorro/Auto-config space» (20-5F, E8-EF, C0-CF)</li></ul>|
+| _REG     | credit card register space                   | in         | смотри _CC_ENA                                                |
+| _RESET   | buffered reset signal                                 | in         | Буферизованный _RST, идущий на клокпорт и ide        |
+| RIGHT    | right audio channel                          | analog out | Правый канал аудио, миксуется со звуком paula через резистивный сумматор (у аудио своя земля, если что) |
+| _RTC_CS  | DC (RTC) chip select (use with _IORD/_IOWR)  | in         | CS c клокпорта из gayle                                                                                                                                                     |
+| _SPARE_CS| D8 (UART) chip select (use with _IORD/_IOWR) | in         | CS c клокпорта из gayle                                                                                                                                                     |
+| SYSTEM_0 | System type code                             | --         | Всегда посажен на землю                                                                                                                                            |
+| SYSTEM_1 | ""                                                    | --         | Всегда посажен на землю                                                                                                                                            |
+| _WAIT    | wait Dinput for _IORD/_IOWR/_OE/_WE          | out OC     |<ul><li>добавляет waitstate'ы к периферийным транзакциям через gayle</li><li>подключен к ide и pcmcia </li></ul>|
+| _WE  | memory write strobe                  | in       | генерируются gayle, идут к PCMCIA и возможно на Kickstart |
+| -----| --------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| _WIDE| 32-bit termination (broken in A1200) | --       | Cломано на 1200                                             |
+| XRDY | wait request                         | out (??) |Не нашёл объяснения целевого предназначения этого сигнала, но вот что пишут:<ul><li>XRDY holds of the assertion of _DSACK but does not tn-state the DSACK lines</li><li>If XRDY is asserted in time, generation of _DTACK is held off until XRDY is negated.</li><li>Use of these signals is only supported in the «Zorro/Auto-config space» (20-5F, E8-EF, C0-CF)</li><li>Other address ranges ignore the XRDY signal.</li></ul>|
+| _ZORRO| 7MHz bus master (not supported in A1200) | --  | Cломано на 1200                    |
+| _xRxD | receive data from serial connector       | out | Rx, c serial port машины |
+| _xTxD | transmit data or'ed to serial connector  | out | Tx, идёт на serial port машины через AND |
+
+
+### signals not implemented on A1200/68EC020 ###
+
+
+| Сигнал| Описание                  |
+| ------------| --------------------------------- |
+| A(31:24)    | processor address lines |
+| _BGACK      | bus grant acknowledge             |
+| _CBACK      | cache burst acknowledge           |
+| _CBREQ      | cache burst request               |
+| _CIIN       | cache inhibit in                  |
+| _ClOUT      | cache inhibit out                 |
+| _ECS        | early cycle start                 |
+| _IPEND      | interrupt pending                 |
+| _OCS        | operand cycle start               |
+| _STERM      | synchronous termination           |
+
+### math coprocessor signals ###
+
+
+| _FPU_CS   | floating point chip select |
+| ----------| ------------------------------------ |
+| _FPU_SENSE| floating point chip detect |
+
+### Power and Ground ###
+
+
+| Сигнал   | Описание             |
+| ---------------| ---------------------------- |
+| +5v (11 pins)  | logic +5 volts @250 MA  |
+| GROUND(11 pins)| logic ground                 |
+| +12v (1 pin)   | +12 volts @25 MA        |
+| -12v (1 pin)   | -12 volts @25 MA      |
+| AUDIO (1 pin)  | audio ground                 |
